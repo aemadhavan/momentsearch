@@ -30,7 +30,7 @@ COPY requirements.txt requirements-clip.txt ./
 # the local transcript branch's warmup) plus the local-CLIP torch stack. No
 # ffmpeg/nodejs/yt-dlp and no ui/ — this box only embeds.
 RUN pip install --no-cache-dir -r requirements.txt \
- && pip install --no-cache-dir torch --index-url ${TORCH_INDEX_URL} \
+ && pip install --no-cache-dir torch --extra-index-url ${TORCH_INDEX_URL} \
  && pip install --no-cache-dir -r requirements-clip.txt
 
 COPY src/ src/

@@ -34,7 +34,7 @@ COPY requirements.txt requirements-clip.txt ./
 # sentence-transformers on top of it.
 RUN pip install --no-cache-dir -r requirements.txt \
  && if [ "$WITH_TORCH" = "true" ]; then \
-      pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+      pip install --no-cache-dir torch --extra-index-url https://download.pytorch.org/whl/cpu \
    && pip install --no-cache-dir -r requirements-clip.txt; \
     fi
 
