@@ -1,16 +1,16 @@
 # Assignment 3 — Moment Search at Scale · Eval Report
 
-Student: Madhavan  ·  Base URL: http://127.0.0.1:8100
+Student: Madhavan  ·  Base URL: https://momentsearch-api-production.up.railway.app
 
 | Check | Result | Evidence |
 |---|---|---|
 | app_up | ✅ pass | GET / -> 200 |
-| documents_async | ✅ pass | POST /admin/documents -> 202 in 29ms |
-| sources_status | ✅ pass | GET /admin/sources -> 200, kinds=['deck', 'paper', 'video'] |
-| paper_indexed | ✅ pass | page-locator citation present: True |
-| deck_indexed | ✅ pass | slide-locator citation present: True |
-| cross_source | ✅ pass | kinds across answers: ['deck', 'paper'] |
-| grounded | ✅ pass | 6 citations, all with text+locator: True |
+| documents_async | ❌ fail | POST /admin/documents -> 202 in 560ms |
+| sources_status | ✅ pass | GET /admin/sources -> 200, kinds=['paper'] |
+| paper_indexed | ❌ fail | page-locator citation present: False |
+| deck_indexed | ❌ fail | slide-locator citation present: False |
+| cross_source | ❌ fail | kinds across answers: [] |
+| grounded | ❌ fail | 0 citations, all with text+locator: False |
 | decoupled | ❌ fail | run `python benchmark/bench.py` — search p95 during ingest <= 1.3x idle |
 | RED_LINE_canary_clean | ✅ pass | clean |
 

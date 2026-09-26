@@ -194,7 +194,8 @@ def ingest_paper(doc_id: str, user_id: str) -> dict[str, Any]:
     attempt = db.bump_document_attempts(doc_id)
     doc_row = db.get_document(doc_id)
     if not doc_row:
-        raise ValueError(f"No document row found for {doc_id}")
+        print(f"[paper] No document row found for {doc_id} (skipping stale run)")
+        return {"doc_id": doc_id, "status": "skipped"}
 
     uri = doc_row["uri"]
     title = doc_row.get("title") or Path(uri).stem
