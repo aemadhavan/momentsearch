@@ -35,6 +35,7 @@ benchmark/__pycache__/
 
 # Internal presentations (not published)
 *.pptx
+!Assignment3_Moment_Search_Presentation.pptx
 
 # Blog draft + its diagram sources (not published)
 BLOG.md
