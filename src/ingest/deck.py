@@ -26,10 +26,16 @@ from typing import Any
 import pymupdf as fitz
 from prefect import flow, task
 
-from .. import config, db
-from ..config import DATA, TEXT_EMBED_VERSION
-from ..rag import vector_store
-from ..rag.embeddings import embed_docs
+try:
+    from .. import config, db
+    from ..config import DATA, TEXT_EMBED_VERSION
+    from ..rag import vector_store
+    from ..rag.embeddings import embed_docs
+except (ImportError, ValueError):
+    from src import config, db
+    from src.config import DATA, TEXT_EMBED_VERSION
+    from src.rag import vector_store
+    from src.rag.embeddings import embed_docs
 
 SCRATCH_DIR = DATA / "scratch"
 SCRATCH_DIR.mkdir(parents=True, exist_ok=True)
