@@ -119,7 +119,9 @@ def t_embed_index(video_id: str, user_id: str, frames: list[Frame]) -> int:
             user_id, video_id,
             ids=range(start, start + len(batch)),
             vectors=vectors,
-            payloads=[{"user_id": user_id, "video_id": video_id, "ms": f.ms,
+            payloads=[{"user_id": user_id, "video_id": video_id, "source_id": video_id,
+                       "kind": "video", "ms": f.ms,
+                       "locator": {"start_ms": f.ms, "end_ms": f.ms + 1000},
                        "idx": start + i, "modality": "frame",
                        "t_start": f.ms / 1000.0, "t_end": f.ms / 1000.0,
                        "embed_version": EMBED_VERSION}
@@ -193,8 +195,11 @@ def t_transcript(video_id: str, user_id: str, path: str | None = None) -> int:
         vector_store.ensure_text_collection()
         vecs = embed_docs([c["text"] for c in chunks])
         vector_store.upsert_chunks(user_id, video_id, vecs, payloads=[
-            {"user_id": user_id, "video_id": video_id, "modality": "text",
+            {"user_id": user_id, "video_id": video_id, "source_id": video_id,
+             "kind": "video", "modality": "text",
              "t_start": c["t_start"], "t_end": c["t_end"],
+             "start_ms": int(c["t_start"] * 1000), "end_ms": int(c["t_end"] * 1000),
+             "locator": {"start_ms": int(c["t_start"] * 1000), "end_ms": int(c["t_end"] * 1000)},
              "ms": int(c["t_start"] * 1000), "text": c["text"],
              **({"speaker": c["speaker"]} if c.get("speaker") else {}),
              "embed_version": TEXT_EMBED_VERSION} for c in chunks])

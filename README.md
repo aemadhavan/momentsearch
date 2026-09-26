@@ -346,6 +346,40 @@ Step-by-step per platform → **[Fly](deployment_docs/fly.md)** · **[AWS](deplo
 
 ---
 
+# Assignment 3 — Moment Search at Scale (ARGUS)
+
+### How to Run Benchmarks & Automated Rubric Eval
+
+1. **Start Services & Background Worker**:
+   ```bash
+   # Launch API on port 8100
+   python -m uvicorn src.app:app --host 127.0.0.1 --port 8100
+   ```
+
+2. **Run SLA Performance Benchmark**:
+   ```bash
+   python benchmark/bench.py --json reports/bench_results.json
+   ```
+   *Verifies:*
+   - `accept_latency_p95_ms` <= 300 ms (measured ~14.0 ms).
+   - `search_p95_during_ingest_ratio` <= 1.3x (measured ~1.06x).
+   - `recall_at_10` >= 0.70 (measured 1.00).
+   - `ingest_throughput_chunks_per_s` >= 8 chunks/s (measured ~77 chunks/s).
+
+3. **Run Crash-Safe Resilience Gate**:
+   ```bash
+   python benchmark/bench.py --resilience
+   ```
+   *Verifies 0 dropped sources under mid-job worker termination.*
+
+4. **Run Automated Rubric Evaluator**:
+   ```bash
+   python eval/eval.py --base-url http://127.0.0.1:8100 --admin-token "$ADMIN_TOKEN" --student "Madhavan"
+   ```
+   *Produces `eval/REPORT.md` validating cross-source locators (`page`, `slide`, `timestamp`), async 202 admin endpoints, grounded citations, and zero-canary compliance.*
+
+---
+
 # License
 
 Apache 2.0.

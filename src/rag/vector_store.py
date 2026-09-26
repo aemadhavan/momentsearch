@@ -223,6 +223,31 @@ def upsert_chunks(user_id: str, video_id: str, vectors: np.ndarray,
         client().upsert(collection_name=TEXT_COLLECTION, points=points, wait=True)
 
 
+def upsert_document_chunks(user_id: str, doc_id: str, vectors: np.ndarray,
+                           payloads: list[dict[str, Any]]) -> None:
+    """Document chunks (papers and decks) into the shared text collection. IDs are uuid5 of
+    '<doc_id>:doc:{i}' so re-runs overwrite idempotently."""
+    points = [
+        qm.PointStruct(id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"{doc_id}:doc:{i}")),
+                       vector=vec.tolist(), payload=payload)
+        for i, (vec, payload) in enumerate(zip(vectors, payloads))
+    ]
+    if points:
+        client().upsert(collection_name=TEXT_COLLECTION, points=points, wait=True)
+
+
+def delete_document(user_id: str, doc_id: str) -> None:
+    """Purge document chunks from the shared text collection."""
+    sel = qm.FilterSelector(filter=qm.Filter(must=[
+        qm.FieldCondition(key="user_id", match=qm.MatchValue(value=user_id)),
+        qm.FieldCondition(key="source_id", match=qm.MatchValue(value=doc_id)),
+    ]))
+    try:
+        client().delete(collection_name=TEXT_COLLECTION, points_selector=sel, wait=True)
+    except Exception:
+        pass
+
+
 def search_text(vector: np.ndarray, user_id: str, *, top_k: int,
                 video_id: str | None = None,
                 video_ids: list[str] | None = None,

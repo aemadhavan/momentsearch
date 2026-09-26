@@ -57,6 +57,25 @@ CREATE TABLE IF NOT EXISTS ms_videos (
 CREATE INDEX IF NOT EXISTS ms_videos_user_idx   ON ms_videos (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS ms_videos_status_idx ON ms_videos (status);
 CREATE INDEX IF NOT EXISTS ms_videos_hash_idx   ON ms_videos (user_id, source_hash);
+
+-- Multi-source documents (papers and decks) for Assignment 3 ARGUS
+CREATE TABLE IF NOT EXISTS ms_documents (
+    id           TEXT PRIMARY KEY,           -- doc_<uuid4 hex>
+    user_id      TEXT NOT NULL,
+    kind         TEXT NOT NULL,              -- paper | deck
+    uri          TEXT NOT NULL,
+    title        TEXT,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    error        TEXT,
+    chunk_count  INT,
+    progress     REAL,                       -- 0..1 within current stage
+    attempts     INT NOT NULL DEFAULT 0,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ms_documents_user_idx   ON ms_documents (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ms_documents_status_idx ON ms_documents (status);
+
 -- Speaker recognition ("who said what") is opt-in per video (a checkbox at
 -- upload). Added as a migration so databases created before it get the column.
 ALTER TABLE ms_videos ADD COLUMN IF NOT EXISTS diarize BOOLEAN NOT NULL DEFAULT false;
@@ -280,6 +299,148 @@ def list_videos(user_id: str, status: str | None = None,
     params.append(user_id)
     with pool().connection() as conn:
         return conn.execute(q, tuple(params)).fetchall()
+
+
+# ── Documents (papers and decks) ───────────────────────────────────────────────
+
+def create_document(doc_id: str, user_id: str, kind: str, uri: str, title: str | None = None) -> dict:
+    """Insert a document with status 'pending'."""
+    with pool().connection() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO ms_documents (id, user_id, kind, uri, title, status)
+            VALUES (%s, %s, %s, %s, %s, 'pending')
+            ON CONFLICT (id) DO UPDATE SET
+                uri = EXCLUDED.uri,
+                title = COALESCE(EXCLUDED.title, ms_documents.title),
+                kind = EXCLUDED.kind,
+                status = 'pending',
+                error = NULL,
+                progress = NULL,
+                updated_at = now()
+            RETURNING *
+            """,
+            (doc_id, user_id, kind, uri, title),
+        ).fetchone()
+    return dict(row) if row else {}
+
+
+def get_document(doc_id: str) -> dict | None:
+    with pool().connection() as conn:
+        row = conn.execute("SELECT * FROM ms_documents WHERE id = %s", (doc_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def set_document_status(doc_id: str, status: str, *, error: str | None = None,
+                        title: str | None = None, chunk_count: int | None = None,
+                        progress: float | None = None) -> None:
+    with pool().connection() as conn:
+        conn.execute(
+            """
+            UPDATE ms_documents SET
+                status = %s,
+                error = %s,
+                title = COALESCE(%s, title),
+                chunk_count = COALESCE(%s, chunk_count),
+                progress = COALESCE(%s, progress),
+                updated_at = now()
+            WHERE id = %s
+            """,
+            (status, error, title, chunk_count, progress, doc_id),
+        )
+
+
+def set_document_progress(doc_id: str, progress: float) -> None:
+    with pool().connection() as conn:
+        conn.execute(
+            "UPDATE ms_documents SET progress = %s, updated_at = now() WHERE id = %s",
+            (round(progress, 3), doc_id),
+        )
+
+
+def bump_document_attempts(doc_id: str) -> int:
+    with pool().connection() as conn:
+        row = conn.execute(
+            "UPDATE ms_documents SET attempts = attempts + 1, updated_at = now() WHERE id = %s RETURNING attempts",
+            (doc_id,),
+        ).fetchone()
+    return row["attempts"] if row else 0
+
+
+def list_documents(user_id: str | None = None, status: str | None = None) -> list[dict]:
+    with pool().connection() as conn:
+        q = "SELECT * FROM ms_documents WHERE 1=1"
+        params: list = []
+        if user_id:
+            q += " AND user_id = %s"
+            params.append(user_id)
+        if status:
+            q += " AND status = %s"
+            params.append(status)
+        q += " ORDER BY created_at DESC"
+        rows = conn.execute(q, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def list_all_sources(user_id: str | None = None) -> list[dict]:
+    """Unified list of sources (videos + documents) for GET /admin/sources.
+
+    Returns:
+      [
+        {"id": "...", "kind": "video"|"paper"|"deck", "status": "...", "title": "...", "pct": 0..100}
+      ]
+    """
+    sources = []
+    with pool().connection() as conn:
+        # 1. Videos
+        if user_id:
+            v_rows = conn.execute(
+                "SELECT id, title, status, progress, created_at FROM ms_videos WHERE user_id = %s ORDER BY created_at DESC",
+                (user_id,),
+            ).fetchall()
+        else:
+            v_rows = conn.execute(
+                "SELECT id, title, status, progress, created_at FROM ms_videos ORDER BY created_at DESC"
+            ).fetchall()
+        for r in v_rows:
+            prog = r["progress"]
+            pct = int(round(prog * 100)) if prog is not None else (100 if r["status"] == "indexed" else 0)
+            sources.append({
+                "id": r["id"],
+                "kind": "video",
+                "status": r["status"],
+                "title": r["title"] or r["id"],
+                "pct": pct,
+                "created_at": r["created_at"],
+            })
+
+        # 2. Documents
+        if user_id:
+            d_rows = conn.execute(
+                "SELECT id, kind, title, status, progress, created_at FROM ms_documents WHERE user_id = %s ORDER BY created_at DESC",
+                (user_id,),
+            ).fetchall()
+        else:
+            d_rows = conn.execute(
+                "SELECT id, kind, title, status, progress, created_at FROM ms_documents ORDER BY created_at DESC"
+            ).fetchall()
+        for r in d_rows:
+            prog = r["progress"]
+            pct = int(round(prog * 100)) if prog is not None else (100 if r["status"] == "indexed" else 0)
+            sources.append({
+                "id": r["id"],
+                "kind": r["kind"],
+                "status": r["status"],
+                "title": r["title"] or r["id"],
+                "pct": pct,
+                "created_at": r["created_at"],
+            })
+
+    sources.sort(key=lambda s: str(s.get("created_at") or ""), reverse=True)
+    for s in sources:
+        s.pop("created_at", None)
+    return sources
+
 
 
 # ms_users had one job — mapping a sign-in email to a workspace id — and the app

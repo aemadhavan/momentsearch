@@ -60,8 +60,17 @@ def _float(name: str, default: float) -> float:
         return default
 
 
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "").strip()
+
 # --- Database (Neon Postgres) — videos manifest, source of truth ------------
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+_raw_db = os.getenv("DATABASE_URL", "")
+if "@postgres:5432" in _raw_db and not Path("/.dockerenv").exists():
+    try:
+        import socket
+        socket.gethostbyname("postgres")
+    except Exception:
+        _raw_db = _raw_db.replace("@postgres:5432", "@localhost:5433")
+DATABASE_URL = _raw_db
 
 # --- Single user -------------------------------------------------------------
 # This deployment is SINGLE-USER. There is no sign-in, no sign-up and no tenant
@@ -468,7 +477,14 @@ SEED_STRICT = _envbool("SEED_STRICT", False)
 # --- Qdrant ----------------------------------------------------------------------
 # One shared multi-tenant collection: every point carries user_id (tenant payload
 # index) and every search/upsert/delete is user_id-filtered.
-QDRANT_URL = os.getenv("QDRANT_URL", "").strip()
+_raw_qdrant = os.getenv("QDRANT_URL", "").strip()
+if "qdrant:6333" in _raw_qdrant and not Path("/.dockerenv").exists():
+    try:
+        import socket
+        socket.gethostbyname("qdrant")
+    except Exception:
+        _raw_qdrant = _raw_qdrant.replace("qdrant:6333", "localhost:6333")
+QDRANT_URL = _raw_qdrant
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "").strip() or os.getenv("QDRANT_TOKEN", "").strip()
 QDRANT_LOCAL_PATH = os.getenv("QDRANT_LOCAL_PATH", str(DATA / "qdrant"))
 # Frame (image) collection — pairs with TEXT_COLLECTION. IMAGE_COLLECTION is the

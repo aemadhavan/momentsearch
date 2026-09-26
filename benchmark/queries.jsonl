@@ -1,0 +1,6 @@
+{"query": "what does the survey say about hybrid retrieval", "kind": "paper", "locator": {"page": 2}}
+{"query": "the slide about one index for every source", "kind": "deck", "locator": {"slide": 2}}
+{"query": "architecture and prefect queue decoupling", "kind": "deck", "locator": {"slide": 3}}
+{"query": "dense vector similarity fused with sparse bm25", "kind": "paper", "locator": {"page": 2}}
+{"query": "retrieval augmented generation survey and empirical benchmarks", "kind": "paper", "locator": {"page": 1}}
+{"query": "scalable multimodal knowledge retrieval keynote", "kind": "deck", "locator": {"slide": 1}}

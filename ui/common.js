@@ -117,11 +117,24 @@ function partsLine(parts){
 }
 /* Text-only moments have no frame; they're always YouTube, so fall back to the
    video's thumbnail rather than showing an empty box. */
+function modalityBadge(c){
+  const k = c.kind || (c.locator?.page ? "paper" : (c.locator?.slide ? "deck" : "video"));
+  if(k === "paper"){
+    const p = c.locator?.page || c.page || 1;
+    return `<span class="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold tracking-wide">📄 Paper · p.${p}</span>`;
+  }
+  if(k === "deck"){
+    const s = c.locator?.slide || c.slide || 1;
+    return `<span class="text-[9px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold tracking-wide">📊 Slide ${s}</span>`;
+  }
+  const ts = c.timestamp || (c.locator?.start_ms ? fmtT(c.locator.start_ms/1000) : "0:00");
+  return `<span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold tracking-wide">🎬 Video · ${ts}</span>`;
+}
+
 function thumbOf(c){
+  const k = c.kind || (c.locator?.page ? "paper" : (c.locator?.slide ? "deck" : "video"));
+  if(k === "paper" || k === "deck") return null;
   const yid=ytIdOf(c);
-  // matched frame -> the video's own still nearest this moment (text-only) ->
-  // YouTube cover as a last resort. Uploads have no cover, so `preview` is what
-  // keeps a "said" upload moment from showing an empty box.
   return c.thumbnail || c.preview || (yid ? `https://img.youtube.com/vi/${yid}/hqdefault.jpg` : null);
 }
 /* A /api/videos row as something openMoment() can play: the video itself, from
@@ -135,35 +148,52 @@ function shortUrl(url){
   return String(url||"").replace(/^https?:\/\//,"").replace(/^www\./,"").replace(/\/+$/,"");
 }
 function momentCard(c, i){
-  const img=thumbOf(c);
-  const thumb = img
-    ? `<img loading="lazy" src="${esc(img)}" class="w-full h-full object-cover" onerror="this.style.opacity=0">`
-    : `<div class="w-full h-full flex items-center justify-center text-muted text-xs p-2 text-center">transcript moment<br>(no frame)</div>`;
-  const quote = c.transcript
-    ? `<div class="text-[11px] text-muted italic mt-1 line-clamp-2">“${esc(c.transcript)}”</div>` : "";
-  // Who said it (diarization), when present.
+  const k = c.kind || (c.locator?.page ? "paper" : (c.locator?.slide ? "deck" : "video"));
+  let thumb;
+  if(k === "paper"){
+    const p = c.locator?.page || c.page || 1;
+    thumb = `<div class="w-full h-full flex flex-col items-center justify-center bg-blue-50 border-b border-blue-100 p-3 text-center">
+      <div class="text-3xl mb-1">📄</div>
+      <div class="text-[12px] font-bold text-blue-900">Academic Paper</div>
+      <div class="text-[10px] text-blue-600 font-semibold">Page ${p}</div>
+    </div>`;
+  } else if(k === "deck"){
+    const s = c.locator?.slide || c.slide || 1;
+    thumb = `<div class="w-full h-full flex flex-col items-center justify-center bg-purple-50 border-b border-purple-100 p-3 text-center">
+      <div class="text-3xl mb-1">📊</div>
+      <div class="text-[12px] font-bold text-purple-900">Presentation Deck</div>
+      <div class="text-[10px] text-purple-600 font-semibold">Slide ${s}</div>
+    </div>`;
+  } else {
+    const img = thumbOf(c);
+    thumb = img
+      ? `<img loading="lazy" src="${esc(img)}" class="w-full h-full object-cover" onerror="this.style.opacity=0">`
+      : `<div class="w-full h-full flex items-center justify-center text-muted text-xs p-2 text-center">transcript moment<br>(no frame)</div>`;
+  }
+
+  const quoteText = c.text || c.transcript || "";
+  const quote = quoteText
+    ? `<div class="text-[11px] text-muted italic mt-1 line-clamp-2">“${esc(quoteText)}”</div>` : "";
   const spk = c.speaker
     ? `<div class="text-[10px] font-600 text-coral2 mt-1 truncate">🎙 ${esc(c.speaker)}</div>` : "";
-  // Relevance as a real "% match" (the moment's match strength, computed server-side
-  // in src/rag/search.py — NOT the rank-based score). Banded in the app's green /
-  // amber; falls back to the raw score if an older response has no `match`.
+
   const m = c.match;
   const relCls = m>=80 ? "text-[#1f7a43]" : m>=65 ? "text-[#8a6d1a]" : "text-muted";
   const rel = (m!=null)
-    ? `<span class="text-[11px] font-600 ${relCls} ml-auto" title="how strongly this moment matched your question">${m}% match</span>`
-    : `<span class="text-[11px] text-muted ml-auto">score ${c.score}</span>`;
+    ? `<span class="text-[11px] font-600 ${relCls} ml-auto" title="match strength">${m}% match</span>`
+    : (c.score ? `<span class="text-[11px] text-muted ml-auto">score ${c.score}</span>` : "");
+
   return `
   <button class="source pop text-left bg-card border border-line rounded-2xl overflow-hidden shadow-sm hover:border-coral transition" data-n="${c.n}" style="--i:${i||0}">
     <div class="aspect-video bg-paper2 overflow-hidden">${thumb}</div>
     <div class="p-3">
-      <div class="flex items-center gap-2 mb-1">
+      <div class="flex items-center gap-2 mb-1 flex-wrap">
         <span class="text-[10px] font-bold text-white bg-coral rounded px-1.5 py-0.5">${c.n}</span>
-        <span class="text-[11px] text-muted">${esc(c.timestamp)}</span>
-        ${modTags(c.modalities)}
+        ${modalityBadge(c)}
         ${partTags(c.parts)}
         ${rel}
       </div>
-      <div class="text-[12px] font-600 leading-snug line-clamp-2">${esc(c.title||c.video_id)}</div>
+      <div class="text-[12px] font-600 leading-snug line-clamp-2">${esc(c.title||c.sourceId||c.video_id)}</div>
       ${spk}
       ${quote}
     </div>
@@ -174,8 +204,7 @@ function momentCard(c, i){
    openMoment(list, n) — click a card or a [n] pill; the moment opens seeked.
    YouTube plays through the IFrame Player API (so JS can seek AND read the
    current time — that's what moves the transcript); uploads through <video>.
-   The full transcript comes from /api/transcript (durable GCP copy): every line
-   is click-to-seek, and the line at the current time highlights + auto-scrolls. */
+   For papers and decks, renders document / slide viewer with direct jump link. */
 let MODAL_LIST=[];
 let YTP=null, VIDEOEL=null, SYNC=null, CUES=[], ACTIVELINE=-1, _ytApiP=null;
 
@@ -233,14 +262,46 @@ async function loadTranscript(c, secs){             // GCP-only; no transcript -
   highlightAt(secs);
 }
 
-/* Same modal, same transcript sync, but opened on the video itself rather than a
-   retrieved moment — `whole:true` says so, and only the framing copy changes
-   (there is no "matched frame" when nothing was matched). Build one with
-   wholeVideo() below. */
 function openMoment(list, n){
   MODAL_LIST=list||[];
   const c=MODAL_LIST.find(x=>x.n===n); if(!c) return;
-  const secs=Math.floor((c.ms||0)/1000);
+  const k = c.kind || (c.locator?.page ? "paper" : (c.locator?.slide ? "deck" : "video"));
+
+  if(k === "paper" || k === "deck"){
+    const isPaper = k === "paper";
+    const locText = isPaper ? `Page ${c.locator?.page || c.page || 1}` : `Slide ${c.locator?.slide || c.slide || 1}`;
+    $("#mTitle").textContent = c.title || c.sourceId || (isPaper ? "Academic Paper" : "Presentation Deck");
+    $("#mMeta").textContent = `${isPaper ? "Research Paper" : "Presentation Deck"} · ${locText}`;
+    $("#mFrame").style.display = "none";
+    $("#mFrameLabel").textContent = `Verified Grounded Passage (${locText})`;
+    $("#mFrameDesc").textContent = "Retrieved from shared Qdrant index with verified source locator.";
+    $("#mOut").href = c.url || c.uri || "#";
+
+    teardownPlayer();
+    $("#modal").classList.remove("hidden");
+    document.body.style.overflow="hidden";
+
+    const box = $("#playerBox");
+    const icon = isPaper ? "📄" : "📊";
+    const badgeColor = isPaper ? "bg-blue-100 text-blue-900 border-blue-200" : "bg-purple-100 text-purple-900 border-purple-200";
+    const btnColor = isPaper ? "bg-blue-600 hover:bg-blue-700" : "bg-purple-600 hover:bg-purple-700";
+    const targetUrl = c.url || c.uri;
+
+    box.innerHTML = `
+      <div class="w-full h-full flex flex-col justify-center items-center p-6 bg-paper2 rounded-xl text-center overflow-y-auto">
+        <div class="text-5xl mb-2">${icon}</div>
+        <div class="text-base font-bold text-ink mb-1">${esc(c.title || c.sourceId)}</div>
+        <div class="inline-block px-2.5 py-1 rounded-full text-xs font-semibold border ${badgeColor} mb-4">${locText}</div>
+        <div class="max-w-lg w-full text-left bg-card p-4 rounded-xl border border-line text-sm text-ink mb-4 shadow-sm leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">“${esc(c.text || c.transcript || "")}”</div>
+        ${targetUrl ? `<a href="${esc(targetUrl)}${isPaper ? '#page=' + (c.locator?.page || c.page || 1) : ''}" target="_blank" rel="noopener noreferrer" class="px-4 py-2 ${btnColor} text-white font-medium text-xs rounded-lg transition inline-flex items-center gap-1.5 shadow">Open Source Document ↗</a>` : ''}
+      </div>
+    `;
+    const wrap = $("#transcriptWrap");
+    if(wrap) wrap.classList.add("hidden");
+    return;
+  }
+
+  const secs=Math.floor((c.ms||(c.locator?.start_ms ? c.locator.start_ms : 0))/1000);
   $("#mTitle").textContent=c.title||c.video_id;
   $("#mMeta").textContent = c.whole
     ? (c.author ? `By ${c.author} · playing from the start` : "Playing from the start")

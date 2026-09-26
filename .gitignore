@@ -30,7 +30,7 @@ node_modules/
 dist/
 
 # Benchmark
-benchmark/
+benchmark/__pycache__/
 
 
 # Internal presentations (not published)

@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config, db
 from .api.auth import router as auth_router
+from .api.admin import router as admin_router
 from .api.search import UI_DIR, router as search_router
 from .api.sessions import router as sessions_router
 from .api.videos import router as videos_router
@@ -60,9 +61,30 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MomentSearch", version="1.0.0", lifespan=lifespan)
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(sessions_router)
 app.include_router(videos_router)
 app.include_router(search_router)
+
+
+@app.get("/ask_stream")
+def ask_stream_get(q: str, fast: bool = False):
+    """Cross-source hybrid retrieval SSE endpoint for papers, decks, and videos."""
+    from fastapi import HTTPException
+    from fastapi.responses import StreamingResponse
+    from .rag import cross_search
+    if not q or not q.strip():
+        raise HTTPException(status_code=400, detail="Query parameter 'q' is required.")
+    return StreamingResponse(
+        cross_search.stream_ask_cross(q.strip(), config.SINGLE_USER_ID, fast=fast),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
 
 # The UI's stylesheet, scripts and logo assets (ui/app.css, common.js, demo.js,
 # workspace.js, assets/*.png). The HTML pages themselves are NOT served from
